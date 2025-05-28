@@ -1,0 +1,4 @@
+data/
+*.pyc
+lightning_logs/
+*.csv
