@@ -8,7 +8,7 @@ class ImageClassifier(pl.LightningModule):
     def __init__(self, NUM_CLASSES, lr=1e-3):
         super().__init__()
         self.save_hyperparameters()
-        self.model = timm.create_model(model_name='resnet34')
+        self.model = timm.create_model(model_name='resnet34', pretrained=True)
         self.model.fc = nn.Linear(self.model.fc.in_features, NUM_CLASSES)
         self.criterion = nn.CrossEntropyLoss()
 
