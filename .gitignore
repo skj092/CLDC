@@ -2,3 +2,4 @@ data/
 *.pyc
 lightning_logs/
 *.csv
+.ipynb_checkpoints/
