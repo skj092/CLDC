@@ -5,6 +5,8 @@ from torch import nn
 from sklearn.metrics import confusion_matrix
 import wandb
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 class ImageClassifier(pl.LightningModule):
@@ -14,13 +16,12 @@ class ImageClassifier(pl.LightningModule):
         self.model = timm.create_model(model_name='resnet34', pretrained=True)
         self.model.fc = nn.Linear(self.model.fc.in_features, NUM_CLASSES)
         self.criterion = nn.CrossEntropyLoss()
-        # Lists to store batch losses, accuracies, and predictions for epoch-end aggregation
         self.train_losses = []
         self.train_accs = []
         self.val_losses = []
         self.val_accs = []
-        self.val_preds = []  # Store predictions
-        self.val_labels = []  # Store true labels
+        self.val_preds = []
+        self.val_labels = []
 
     def forward(self, xb):
         return self.model(xb)
@@ -41,7 +42,6 @@ class ImageClassifier(pl.LightningModule):
         logits = self(xb)
         loss = self.criterion(logits, yb)
         acc = (logits.argmax(dim=1) == yb).float().mean()
-        # Store predictions and labels
         preds = logits.argmax(dim=1)
         self.val_preds.append(preds)
         self.val_labels.append(yb)
@@ -52,7 +52,6 @@ class ImageClassifier(pl.LightningModule):
         return loss
 
     def on_train_epoch_end(self):
-        # Compute average training loss and accuracy for the epoch
         avg_train_loss = torch.stack(self.train_losses).mean()
         avg_train_acc = torch.stack(self.train_accs).mean()
         self.log('avg_train_loss', avg_train_loss,
@@ -62,7 +61,6 @@ class ImageClassifier(pl.LightningModule):
         self.train_accs.clear()
 
     def on_validation_epoch_end(self):
-        # Compute average validation loss and accuracy for the epoch
         avg_val_loss = torch.stack(self.val_losses).mean()
         avg_val_acc = torch.stack(self.val_accs).mean()
         self.log('avg_val_loss', avg_val_loss, prog_bar=True, on_epoch=True)
@@ -71,28 +69,40 @@ class ImageClassifier(pl.LightningModule):
         # Compute confusion matrix
         preds = torch.cat(self.val_preds).cpu().numpy()
         labels = torch.cat(self.val_labels).cpu().numpy()
-        cm = confusion_matrix(
-            labels, preds, labels=range(self.hparams.NUM_CLASSES))
 
-        # Log confusion matrix to WandB
+        # Option 1: Log confusion matrix as a table (cleaner visualization)
         if self.logger:
-            # Option 1: Log as a WandB confusion matrix plot
+            cm = confusion_matrix(
+                labels, preds, labels=range(self.hparams.NUM_CLASSES))
+
+            # Create a WandB Table for better visualization
+            class_names = [f"Class_{i}" for i in range(
+                self.hparams.NUM_CLASSES)]
+            cm_table = wandb.Table(
+                columns=["Actual"] + class_names,
+                data=[[class_names[i]] + cm[i].tolist()
+                      for i in range(len(class_names))]
+            )
+
             self.logger.experiment.log({
-                "confusion_matrix": wandb.plot.confusion_matrix(
-                    probs=None,
-                    y_true=labels,
-                    preds=preds,
-                    class_names=[f"Class {i}" for i in range(
-                        self.hparams.NUM_CLASSES)]
-                ),
+                "confusion_matrix_table": cm_table,
                 "epoch": self.current_epoch
             })
 
-            # Option 2: Log as a WandB table (optional, for more customization)
-            cm_table = wandb.Table(data=cm.tolist(), columns=[
-                                   f"Class {i}" for i in range(self.hparams.NUM_CLASSES)])
-            self.logger.experiment.log(
-                {"confusion_matrix_table": cm_table, "epoch": self.current_epoch})
+            # Option 2: Also log as heatmap using matplotlib but convert to wandb.Image
+            fig, ax = plt.subplots(figsize=(8, 6))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
+                        xticklabels=class_names, yticklabels=class_names)
+            ax.set_xlabel('Predicted')
+            ax.set_ylabel('Actual')
+            ax.set_title(f'Confusion Matrix - Epoch {self.current_epoch}')
+
+            self.logger.experiment.log({
+                "confusion_matrix_heatmap": wandb.Image(fig),
+                "epoch": self.current_epoch
+            })
+
+            plt.close(fig)
 
         # Clear the lists for the next epoch
         self.val_losses.clear()

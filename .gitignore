@@ -3,3 +3,5 @@ data/
 lightning_logs/
 *.csv
 .ipynb_checkpoints/
+wandb/
+cassava-leaf-disease/

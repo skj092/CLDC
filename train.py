@@ -6,7 +6,7 @@ from albumentations.pytorch import ToTensorV2
 from dataset import CData
 from torch.utils.data import DataLoader
 from model import ImageClassifier
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger
 import wandb
@@ -20,8 +20,9 @@ TARGET_SIZE = 224
 BATCH_SIZE = 32
 NUM_EPOCHS = 5
 use_wandb = True
-SAMPLE_SIZE = 100  # Configurable sample size for experimentation (set to None for full dataset)
+SAMPLE_SIZE = None  # Configurable sample size for experimentation (set to None for full dataset)
 seed_everything(42)
+os.environ['WANDB_API_KEY'] = "97b5307e24cc3a77259ade3057e4eea6fd2addb0"
 
 # Load and split data
 df = pd.read_csv(path / 'train.csv')
@@ -62,17 +63,17 @@ model = ImageClassifier(5, lr=1e-3)
 
 # Set up logger and callbacks
 logger = WandbLogger(project="cassava-leaf-disease", log_model=False, name=run_name) if use_wandb else None
+checkpoint_callback = ModelCheckpoint(monitor='val_acc',mode='max',save_top_k=1,filename='best-model-{epoch:02d}-{val_acc:.2f}',save_weights_only=False, verbose=True)
+early_stopping_callback = EarlyStopping(monitor='val_acc',mode='max',patience=3, verbose=True)
 
-# Log dataset sizes to WandB
-if logger:
-    wandb.config.update({
-        "train_dataset_size": train_size,
-        "valid_dataset_size": valid_size,
-        "sample_size": SAMPLE_SIZE if SAMPLE_SIZE is not None else "full",
-    })
-
-callbacks = [ModelCheckpoint(monitor='val_acc', mode='max', save_top_k=1)]
-
+callbacks = [checkpoint_callback, early_stopping_callback]
+# # Log dataset sizes to WandB
+# if logger:
+#     wandb.config.update({
+#         "train_dataset_size": train_size,
+#         "valid_dataset_size": valid_size,
+#         "sample_size": SAMPLE_SIZE if SAMPLE_SIZE is not None else "full",
+#     })
 # Configure Trainer for multi-GPU with DDP
 trainer = Trainer(
     max_epochs=NUM_EPOCHS,
