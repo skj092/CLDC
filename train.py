@@ -2,10 +2,10 @@ import pandas as pd
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 import albumentations as A
-from albumentations.pytorch import ToTensorV2  # Explicit import
-from dataset import CData  # Assuming this is your custom dataset class
+from albumentations.pytorch import ToTensorV2
+from dataset import CData
 from torch.utils.data import DataLoader
-from model import ImageClassifier  # Assuming this is your model class
+from model import ImageClassifier
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.loggers import WandbLogger
@@ -20,12 +20,21 @@ TARGET_SIZE = 224
 BATCH_SIZE = 32
 NUM_EPOCHS = 5
 use_wandb = True
+SAMPLE_SIZE = 100  # Configurable sample size for experimentation (set to None for full dataset)
 seed_everything(42)
-run_name = f"cassava_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 # Load and split data
-df = pd.read_csv(path / 'train.csv').sample(100)
+df = pd.read_csv(path / 'train.csv')
+if SAMPLE_SIZE is not None:
+    df = df.sample(SAMPLE_SIZE)
 train_df, valid_df = train_test_split(df, test_size=0.2, stratify=df['label'])
+
+# Calculate dataset sizes
+train_size = len(train_df)
+valid_size = len(valid_df)
+
+# Create run name with dataset sizes
+run_name = f"cassava_train{train_size}_val{valid_size}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
 # Define transforms
 train_transform = A.Compose([
@@ -53,6 +62,15 @@ model = ImageClassifier(5, lr=1e-3)
 
 # Set up logger and callbacks
 logger = WandbLogger(project="cassava-leaf-disease", log_model=False, name=run_name) if use_wandb else None
+
+# Log dataset sizes to WandB
+if logger:
+    wandb.config.update({
+        "train_dataset_size": train_size,
+        "valid_dataset_size": valid_size,
+        "sample_size": SAMPLE_SIZE if SAMPLE_SIZE is not None else "full",
+    })
+
 callbacks = [ModelCheckpoint(monitor='val_acc', mode='max', save_top_k=1)]
 
 # Configure Trainer for multi-GPU with DDP
@@ -61,7 +79,7 @@ trainer = Trainer(
     logger=logger,
     callbacks=callbacks,
     accelerator='auto',
-    devices='auto',  # Use both GPUs
+    devices='auto',
 )
 
 # Train the model
