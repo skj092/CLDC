@@ -70,18 +70,39 @@ class ImageClassifier(pl.LightningModule):
         preds = torch.cat(self.val_preds).cpu().numpy()
         labels = torch.cat(self.val_labels).cpu().numpy()
 
-        # Log the WandB confusion matrix plot
+        # Option 1: Log confusion matrix as a table (cleaner visualization)
         if self.logger:
+            cm = confusion_matrix(
+                labels, preds, labels=range(self.hparams.NUM_CLASSES))
+
+            # Create a WandB Table for better visualization
+            class_names = [f"Class_{i}" for i in range(
+                self.hparams.NUM_CLASSES)]
+            cm_table = wandb.Table(
+                columns=["Actual"] + class_names,
+                data=[[class_names[i]] + cm[i].tolist()
+                      for i in range(len(class_names))]
+            )
+
             self.logger.experiment.log({
-                "confusion_matrix": wandb.plot.confusion_matrix(
-                    probs=None,
-                    y_true=labels,
-                    preds=preds,
-                    class_names=[f"Class {i}" for i in range(
-                        self.hparams.NUM_CLASSES)]
-                ),
+                "confusion_matrix_table": cm_table,
                 "epoch": self.current_epoch
             })
+
+            # Option 2: Also log as heatmap using matplotlib but convert to wandb.Image
+            fig, ax = plt.subplots(figsize=(8, 6))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', ax=ax,
+                        xticklabels=class_names, yticklabels=class_names)
+            ax.set_xlabel('Predicted')
+            ax.set_ylabel('Actual')
+            ax.set_title(f'Confusion Matrix - Epoch {self.current_epoch}')
+
+            self.logger.experiment.log({
+                "confusion_matrix_heatmap": wandb.Image(fig),
+                "epoch": self.current_epoch
+            })
+
+            plt.close(fig)
 
         # Clear the lists for the next epoch
         self.val_losses.clear()
