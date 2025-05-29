@@ -20,7 +20,8 @@ TARGET_SIZE = 224
 BATCH_SIZE = 32
 NUM_EPOCHS = 5
 use_wandb = True
-SAMPLE_SIZE = 100  # Configurable sample size for experimentation (set to None for full dataset)
+# Configurable sample size for experimentation (set to None for full dataset)
+SAMPLE_SIZE = 100
 seed_everything(42)
 os.environ['WANDB_API_KEY'] = "97b5307e24cc3a77259ade3057e4eea6fd2addb0"
 
@@ -55,14 +56,17 @@ val_transform = A.Compose([
 # Create datasets and dataloaders
 train_ds = CData(train_df, path / 'train_images', train_transform)
 valid_ds = CData(valid_df, path / 'train_images', val_transform)
-train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=os.cpu_count(), pin_memory=True)
-valid_dl = DataLoader(valid_ds, batch_size=BATCH_SIZE, shuffle=False, num_workers=os.cpu_count(), pin_memory=True)
+train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE,
+                      shuffle=True, num_workers=os.cpu_count(), pin_memory=True)
+valid_dl = DataLoader(valid_ds, batch_size=BATCH_SIZE,
+                      shuffle=False, num_workers=os.cpu_count(), pin_memory=True)
 
 # Initialize model
-model = ImageClassifier(5, lr=1e-3)
+model = ImageClassifier(model_name='resnet50', num_classes=5, lr=1e-3)
 
 # Set up logger and callbacks
-logger = WandbLogger(project="cassava-leaf-disease", log_model=False, name=run_name) if use_wandb else None
+logger = WandbLogger(project="cassava-leaf-disease",
+                     log_model=False, name=run_name) if use_wandb else None
 
 # # Log dataset sizes to WandB
 # if logger:

@@ -10,11 +10,24 @@ import seaborn as sns
 
 
 class ImageClassifier(pl.LightningModule):
-    def __init__(self, NUM_CLASSES, lr=1e-3):
+    def __init__(self, model_name, num_classes, lr=1e-3, pretrained=True):
         super().__init__()
         self.save_hyperparameters()
-        self.model = timm.create_model(model_name='resnet34', pretrained=True)
-        self.model.fc = nn.Linear(self.model.fc.in_features, NUM_CLASSES)
+        self.model = timm.create_model(
+            model_name=model_name, pretrained=pretrained)
+
+        if hasattr(self.model, 'fc'):
+            self.model.fc = nn.Linear(self.model.fc.in_features, num_classes)
+        elif hasattr(self.model, 'classifier') and isinstance(self.model.classifier, nn.Linear):
+            self.model.classifier = nn.Linear(
+                self.model.classifier.in_features, num_classes)
+        elif hasattr(self.model, 'head') and isinstance(self.model.head, nn.Linear):
+            self.model.head = nn.Linear(
+                self.model.head.in_features, num_classes)
+        else:
+            raise NotImplementedError(
+                f"Unknown model head structure for {model_name}")
+
         self.criterion = nn.CrossEntropyLoss()
         self.train_losses = []
         self.train_accs = []
