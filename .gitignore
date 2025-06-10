@@ -5,3 +5,4 @@ lightning_logs/
 .ipynb_checkpoints/
 wandb/
 cassava-leaf-disease/
+.env
